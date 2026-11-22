@@ -1,0 +1,62 @@
+# A database for development, and the whole API in a container when you want one.
+#
+#   docker compose up -d db       MongoDB only - for `npm run dev` against a container
+#   docker compose up --build     MongoDB + the API on http://localhost:5000
+#
+# Settings come from .env. Nothing here is for production: the database has no password
+# and the demo logins are kept open on purpose.
+services:
+  db:
+    image: mongo:8
+    # A one-member replica set rather than a plain server, because that is what makes
+    # transactions work (and what production - Atlas - always is).
+    command: ["--replSet", "rs0", "--bind_ip_all"]
+    # Published on the loopback interface only, and off the default port so it never
+    # collides with a MongoDB installed on the host. Connect with directConnection=true:
+    # the member calls itself localhost:27017, which is not where the host reaches it.
+    ports:
+      - "127.0.0.1:${DB_PORT:-27019}:27017"
+    volumes:
+      - db-data:/data/db
+    healthcheck:
+      # Healthy once the replica set has a primary; the first run initiates it.
+      test:
+        - CMD-SHELL
+        - >-
+          mongosh --quiet --eval "try { rs.status().ok } catch (e) { rs.initiate({ _id: 'rs0', members: [{ _id: 0, host: 'localhost:27017' }] }).ok }
+          ; quit(db.hello().isWritablePrimary ? 0 : 1)"
+      interval: 5s
+      timeout: 10s
+      retries: 30
+      start_period: 10s
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_CLIENT: mongo
+      DATABASE_URL: mongodb://db:27017/app?directConnection=true
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: express-api-template
+      JWT_AUDIENCE: express-api-template-client
+      APP_NAME: express-api-template
+      FRONTEND_URL: http://localhost:5173
+
+      # Builds the indexes before the first request.
+      RUN_MIGRATIONS_ON_STARTUP: "true"
+
+      # The image runs as production, where the app closes the demo accounts on start.
+      # This stack is for development and demos, where signing in as admin@example.com is
+      # the whole point - so this is the explicit opt-out. Never set it on a real deployment.
+      SEED_DEMO_DATA: "true"
+      KEEP_DEMO_LOGINS: "true"
+    ports:
+      - "${API_PORT:-5000}:8080"
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  db-data:
+  uploads:

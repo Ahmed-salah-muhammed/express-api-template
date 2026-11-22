@@ -1,0 +1,34 @@
+@host = http://localhost:5000
+@api = {{host}}/api/v1
+
+### Health - anonymous
+GET {{host}}/health
+
+### Sign in as the seeded administrator - the requests below reuse its token
+# @name login
+POST {{api}}/auth/login-email
+Content-Type: application/json
+
+{
+  "emailOrUsername": "admin@example.com",
+  "password": "Password123!"
+}
+
+###
+@token = {{login.response.body.data.token}}
+
+### Who am I
+GET {{api}}/users/me
+Authorization: Bearer {{token}}
+
+### Users (Admin only)
+GET {{api}}/users?isActive=true
+Authorization: Bearer {{token}}
+
+### Items - an Admin reads every item, everyone else their own
+GET {{api}}/items
+Authorization: Bearer {{token}}
+
+### The dashboard figures for the signed-in role
+GET {{api}}/dashboard/summary
+Authorization: Bearer {{token}}

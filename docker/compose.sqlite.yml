@@ -1,0 +1,37 @@
+# The whole API in a container. SQLite needs no database service: it is a file, kept in a
+# volume so it outlives the container.
+#
+#   docker compose up --build     the API on http://localhost:5000
+#
+# Settings come from .env. Nothing here is for production: it keeps the demo logins open
+# on purpose.
+services:
+  api:
+    build: .
+    environment:
+      DB_CLIENT: sqlite
+      DATABASE_URL: /app/data/app.sqlite
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: express-api-template
+      JWT_AUDIENCE: express-api-template-client
+      APP_NAME: express-api-template
+      FRONTEND_URL: http://localhost:5173
+
+      # Nothing else creates the schema, so a fresh volume would leave the API answering
+      # 500s. This is what makes `docker compose up` work from nothing.
+      RUN_MIGRATIONS_ON_STARTUP: "true"
+
+      # The image runs as production, where the app closes the demo accounts on start.
+      # This stack is for development and demos, where signing in as admin@example.com is
+      # the whole point - so this is the explicit opt-out. Never set it on a real deployment.
+      SEED_DEMO_DATA: "true"
+      KEEP_DEMO_LOGINS: "true"
+    ports:
+      - "${API_PORT:-5000}:8080"
+    volumes:
+      - data:/app/data
+      - uploads:/app/uploads
+
+volumes:
+  data:
+  uploads:

@@ -1,0 +1,29 @@
+# Installed inside the image against the lockfile; a host node_modules would drag in
+# binaries built for another platform.
+node_modules/
+
+# Configuration and secrets never enter an image layer: they arrive as environment
+# variables at run time.
+.env
+.env.*
+
+# Uploaded files and the SQLite database live in volumes, not in the image.
+uploads/
+data/
+
+# Tests, tooling and docs run in CI or on a developer's machine, never in the container.
+tests/
+scripts/
+docker/
+coverage/
+vitest.config.js
+eslint.config.js
+*.http
+*.md
+.git/
+.gitignore
+.github/
+.vscode/
+Dockerfile
+.dockerignore
+docker-compose.yml

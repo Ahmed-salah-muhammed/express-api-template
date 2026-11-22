@@ -1,0 +1,61 @@
+# A database for development, and the whole API in a container when you want one.
+#
+#   docker compose up -d db       MySQL only - for `npm run dev` against a container
+#   docker compose up --build     MySQL + the API on http://localhost:5000
+#
+# Settings come from .env. Nothing here is for production: it keeps the demo logins open
+# on purpose.
+services:
+  db:
+    image: mysql:8.4
+    environment:
+      MYSQL_DATABASE: app
+      MYSQL_USER: app
+      MYSQL_PASSWORD: ${DB_PASSWORD:?set DB_PASSWORD in .env}
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD}
+    # Published on the loopback interface only, and off the default port so it never
+    # collides with a MySQL installed on the host.
+    ports:
+      - "127.0.0.1:${DB_PORT:-33069}:3306"
+    volumes:
+      - db-data:/var/lib/mysql
+    healthcheck:
+      # The API's first act is to run migrations, so it must not start until the server
+      # is actually answering as the application's own user - the image restarts once
+      # while it initialises, and "container started" is well before that.
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -uapp -p\"$$MYSQL_PASSWORD\" -e 'SELECT 1' app"]
+      interval: 5s
+      timeout: 5s
+      retries: 60
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DB_CLIENT: mysql
+      DATABASE_URL: mysql://app:${DB_PASSWORD}@db:3306/app
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      JWT_ISSUER: express-api-template
+      JWT_AUDIENCE: express-api-template-client
+      APP_NAME: express-api-template
+      FRONTEND_URL: http://localhost:5173
+
+      # Nothing else creates the schema, so a fresh volume would leave the API answering
+      # 500s. This is what makes `docker compose up` work from nothing.
+      RUN_MIGRATIONS_ON_STARTUP: "true"
+
+      # The image runs as production, where the app closes the demo accounts on start.
+      # This stack is for development and demos, where signing in as admin@example.com is
+      # the whole point - so this is the explicit opt-out. Never set it on a real deployment.
+      SEED_DEMO_DATA: "true"
+      KEEP_DEMO_LOGINS: "true"
+    ports:
+      - "${API_PORT:-5000}:8080"
+    volumes:
+      - uploads:/app/uploads
+
+volumes:
+  db-data:
+  uploads:
